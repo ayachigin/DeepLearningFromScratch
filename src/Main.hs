@@ -22,6 +22,8 @@ orP = perceptron (Perceptron 0.1 0.1 0)
 
 notP = perceptron (Perceptron 1 (-1) 0) 1
 
+xorP x y = andP (nandP x y) (orP x y)
+
 perceptron :: Perceptron -> Double -> Double -> Double
 perceptron (Perceptron w1 w2 b) x y =
   if val <= 0 then
