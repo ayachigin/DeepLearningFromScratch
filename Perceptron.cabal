@@ -20,4 +20,5 @@ executable Perceptron
                      , repa
                      , repa-algorithms
                      , repa-io
-
+                     , bytestring
+                     , random
