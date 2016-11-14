@@ -4,38 +4,44 @@ module Main where
 import Prelude hiding (map, zipWith)
 import Data.Array.Repa
 import Data.Array.Repa.Algorithms.Matrix
-
-ain = do
-  let w1 = (fromListUnboxed (ix2 1 2) [1.0, 0.5]::Array U DIM2 Double)
-  v <- mmultP w1 x2
-  print $ toList (w1:: Array U DIM2 Double)
-  print $ toList v --(v :: Array U DIM2 Double)
-  return ()
-      --where
-
-x2 :: Array U DIM2 Double
-x2 = fromListUnboxed (ix2 2 3) [0.1, 0.3, 0.5, 0.2, 0.4, 0.6]
-xs' :: Array U DIM1 Int
-xs' = fromListUnboxed (ix1 2) [1, 5]
+import Data.Foldable (foldlM)
 
 type Matrix = Array U DIM2 Double
 
+type Weight = Matrix
+
+type Bias = Matrix
+
+type ActivationFunction = Double -> Double
+
+type Layer = (Weight, Bias, ActivationFunction)
+
+type NN = [Layer]
+
 main :: IO ()
 main = do
-  let x  = fromListUnboxed (ix2 1 2) [1.0, 0.5]
-      w1 = fromListUnboxed (ix2 2 3) [0.1, 0.3, 0.5, 0.2, 0.4, 0.6]
-      b1 = fromListUnboxed (ix2 1 3) [0.1, 0.2, 0.3]
-      a1 = zipWith (+) b1 $ mmultS x w1
-      z1 = computeS $ map sigmonoid a1
-      w2 = fromListUnboxed (ix2 3 2) [0.1, 0.4, 0.2, 0.5, 0.3, 0.6]
-      b2 = fromListUnboxed (ix2 1 2) [0.1, 0.2]
-      a2 = zipWith (+) b2 $ mmultS z1 w2
-      z2 = computeS $ map sigmonoid a2
-      w3 = fromListUnboxed (ix2 2 2) [0.1, 0.3, 0.2, 0.4]
-      b3 = fromListUnboxed (ix2 1 2) [0.1, 0.2]
-      a3 = zipWith (+) b3 $ mmultS z2 w3
-      z3 = a3
+  let input  = fromListUnboxed (ix2 1 2) [1.0, 0.5]
+  z3 <- perfoNN input nn
   print $ toList z3
+
+perfoNN :: Monad m => Matrix -> NN -> m Matrix
+perfoNN input n = foldlM f input n
+  where
+    f :: Monad m => Matrix -> Layer -> m Matrix
+    f i (w, b, a) = computeP . map a .
+                    zipWith (+) b $ mmultS i w
+
+nn :: NN
+nn = [ ( fromListUnboxed (ix2 2 3) [0.1, 0.3, 0.5, 0.2, 0.4, 0.6]
+       , fromListUnboxed (ix2 1 3) [0.1, 0.2, 0.3]
+       , sigmonoid )
+     , ( fromListUnboxed (ix2 3 2) [0.1, 0.4, 0.2, 0.5, 0.3, 0.6]
+       , fromListUnboxed (ix2 1 2) [0.1, 0.2]
+       , sigmonoid )
+     , ( fromListUnboxed (ix2 2 2) [0.1, 0.3, 0.2, 0.4]
+       , fromListUnboxed (ix2 1 2) [0.1, 0.2]
+       , id)
+     ]
 
 sigmonoid :: Double -> Double
 sigmonoid x = 1 / (1 + exp (-x))
