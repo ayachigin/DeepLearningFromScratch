@@ -23,7 +23,7 @@ type Layer = (Weight, Bias, ActivationFunction)
 
 type NN = [Layer]
 
-type LossFunction = Vector -> Vector -> Double
+type LossFunction = Matrix -> Matrix -> Double
 
 main :: IO ()
 main = do
@@ -52,6 +52,15 @@ main = do
     x3 = matrix (ix2 100 10) (100 * 10) ((-10), 100) 5
     b3 = matrix (ix2 1 10) 10 ((-10), 10) 100
 
+{- | loass function meanSquaredError
+>>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
+>>> let t = fromListUnboxed (ix2 1 10) [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+>>> meanSquaredError y t
+0.5974999999999999
+>>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.6, 0, 0.05, 0.1, 0, 0.1, 0, 0]
+>>> meanSquaredError y t
+9.750000000000003e-2
+-}
 meanSquaredError :: LossFunction
 meanSquaredError x y = 0.5 * (sumAllS $ zipWith (\a b -> (a-b)^2) x y)
 
