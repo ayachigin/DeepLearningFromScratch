@@ -11,7 +11,7 @@ import Mnist (readTrainDataSets, DataSet, normalize)
 
 type Matrix = Array U DIM2 Double
 
-type Vec = Array U DIM1 Double
+type Vector = Array U DIM1 Double
 
 type Weight = Matrix
 
@@ -22,6 +22,8 @@ type ActivationFunction = Double -> Double
 type Layer = (Weight, Bias, ActivationFunction)
 
 type NN = [Layer]
+
+type LossFunction = Vector -> Vector -> Double
 
 main :: IO ()
 main = do
@@ -49,6 +51,9 @@ main = do
     b2 = matrix (ix2 1 100) 100 ((-10), 100) 20
     x3 = matrix (ix2 100 10) (100 * 10) ((-10), 100) 5
     b3 = matrix (ix2 1 10) 10 ((-10), 10) 100
+
+meanSquaredError :: LossFunction
+meanSquaredError x y = 0.5 * (sumAllS $ zipWith (\a b -> (a-b)^2) x y)
 
 pickle :: Show a => a -> FilePath -> IO ()
 pickle a f = writeFile f . show $ a
