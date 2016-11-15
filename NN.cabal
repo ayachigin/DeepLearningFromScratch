@@ -21,6 +21,7 @@ executable NN
                      , repa-algorithms
                      , repa-io
                      , bytestring
+                     , vector
                      , random
 
 test-suite doctests

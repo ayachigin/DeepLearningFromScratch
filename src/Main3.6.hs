@@ -1,7 +1,7 @@
 module Main where
 
 import Prelude hiding (map, zipWith)
-import Data.Array.Repa
+import Data.Array.Repa hiding ((++))
 import Data.Array.Repa.Algorithms.Matrix (mmultS)
 import Data.Array.Repa.Repr.Vector (V, computeVectorP, fromListVector)
 import System.Random (randomRs, mkStdGen)
@@ -25,23 +25,22 @@ type NN = [Layer]
 type LossFunction = Matrix -> Matrix -> Double
 
 batsize :: Int
-batsize = 1000
+batsize = 100
 
 main :: IO ()
 main = do
   d <- dataset
   as <- computeVectorP $ map (performNNStep network) d
-  print $ length $ filter id . toList $ as
+  print $ (/(fromIntegral batsize)) . sum . toList $ as
   where
     dataset :: IO (Array V DIM1 (Array U DIM2 Double, Label))
     dataset = do
       datasets <- fmap (normalize) $ choiceIO batsize
       return . toArray batsize $ datasets
-    performNNStep :: NN -> (Matrix, Int) -> Bool
+    performNNStep :: NN -> (Matrix, Int) -> Double
     performNNStep n (d, l) =
-      let z = (toList.softmax) $ performNN d n
-          a = snd . maximum . zip z $ [1..]
-      in a == l
+      let z = softmax $ performNN d n
+      in calcLoss crossEntropyError z l
     network = [ (x1, b1, sigmonoid)
               , (x2, b2, sigmonoid)
               , (x3, b3, id) ]
@@ -52,9 +51,6 @@ main = do
     b2 = matrix (ix2 1 100) 100 ((-10), 100) 20
     x3 = matrix (ix2 100 10) (100 * 10) ((-10), 100) 5
     b3 = matrix (ix2 1 10) 10 ((-10), 10) 100
-
-
-
 
 {- | loass function meanSquaredError
 >>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
@@ -73,6 +69,17 @@ crossEntropyError x y = (*(-1)) . sumAllS . zipWith (*) y $
                         map (log . (+delta)) x
   where
     delta = 0.1 ^ 7
+
+calcLoss :: LossFunction -> Matrix -> Int -> Double
+calcLoss f m i = f m $ arr i
+  where
+    arr = fromListUnboxed (ix2 1 10) . shift bits
+    shift [] _ = error "Shift empty list"
+    shift ls 0 = ls
+    shift (x:xs) n = shift (xs ++ [x]) (n-1)
+    bits = [1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+
+
 
 pickle :: Show a => a -> FilePath -> IO ()
 pickle a f = writeFile f . show $ a
