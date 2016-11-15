@@ -55,6 +55,12 @@ main = do
 meanSquaredError :: LossFunction
 meanSquaredError x y = 0.5 * (sumAllS $ zipWith (\a b -> (a-b)^2) x y)
 
+crossEntropyError :: LossFunction
+crossEntropyError x y = (*(-1)) . sumAllS . zipWith (*) y $
+                        map (log . (+delta)) x
+  where
+    delta = 0.1 ^ 7
+
 pickle :: Show a => a -> FilePath -> IO ()
 pickle a f = writeFile f . show $ a
 
