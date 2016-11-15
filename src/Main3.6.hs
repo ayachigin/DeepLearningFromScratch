@@ -1,13 +1,12 @@
 module Main where
 
 import Prelude hiding (map, zipWith)
-import Control.Monad (sequence)
 import Data.Array.Repa
-import Data.Array.Repa.Algorithms.Matrix
-import Data.Foldable (foldlM)
+import Data.Array.Repa.Algorithms.Matrix (mmultS)
+import Data.Array.Repa.Repr.Vector (V, computeVectorP, fromListVector)
 import System.Random (randomRs, mkStdGen)
 
-import Mnist (readTrainDataSets, DataSet, normalize)
+import Mnist (choiceIO, toArray, normalize, Label)
 
 type Matrix = Array U DIM2 Double
 
@@ -25,25 +24,27 @@ type NN = [Layer]
 
 type LossFunction = Matrix -> Matrix -> Double
 
+batsize :: Int
+batsize = 1000
+
 main :: IO ()
 main = do
   d <- dataset
-  as <- mapM (performNNStep n) d
-  print $ length $ filter id as
+  as <- computeVectorP $ map (performNNStep network) d
+  print $ length $ filter id . toList $ as
   where
+    dataset :: IO (Array V DIM1 (Array U DIM2 Double, Label))
     dataset = do
-      datasets <- fmap (take 1000) readTrainDataSets
-      return $ fmap (\(d, l) -> ( fromListUnboxed (ix2 1 784) (normalize d)
-                                , l)) datasets
-
-    performNNStep :: NN -> (Matrix, Int) -> IO Bool
-    performNNStep n (d, l) = do
-      z <- fmap (toList.softmax) $ performNN d n
-      let a = snd . maximum . zip z $ [1..]
-      return $ a == l
-    n = [ (x1, b1, sigmonoid)
-         , (x2, b2, sigmonoid)
-         , (x3, b3, id) ]
+      datasets <- fmap (normalize) $ choiceIO batsize
+      return . toArray batsize $ datasets
+    performNNStep :: NN -> (Matrix, Int) -> Bool
+    performNNStep n (d, l) =
+      let z = (toList.softmax) $ performNN d n
+          a = snd . maximum . zip z $ [1..]
+      in a == l
+    network = [ (x1, b1, sigmonoid)
+              , (x2, b2, sigmonoid)
+              , (x3, b3, id) ]
     s1 = 28 * 28 * 50
     x1 = matrix (ix2 784 50) s1 ((-10), 10.0) 10
     b1 = matrix (ix2 1 50) 50 (0.0, 1.0) 10
@@ -51,6 +52,9 @@ main = do
     b2 = matrix (ix2 1 100) 100 ((-10), 100) 20
     x3 = matrix (ix2 100 10) (100 * 10) ((-10), 100) 5
     b3 = matrix (ix2 1 10) 10 ((-10), 10) 100
+
+
+
 
 {- | loass function meanSquaredError
 >>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
@@ -80,11 +84,11 @@ matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix
 matrix shape len range gen = fromListUnboxed shape $
                              take len . randomRs range $ mkStdGen gen
 
-performNN :: Monad m => Matrix -> NN -> m Matrix
-performNN input n = foldlM f input n
+performNN :: Matrix -> NN -> Matrix
+performNN input n = foldl f input n
   where
-    f :: Monad m => Matrix -> Layer -> m Matrix
-    f i (w, b, a) = computeP . map a .
+    f :: Matrix -> Layer -> Matrix
+    f i (w, b, a) = computeS . map a .
                     zipWith (+) b $ mmultS i w
 
 nn :: NN
