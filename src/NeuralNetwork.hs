@@ -9,6 +9,8 @@ import System.Random (mkStdGen, randomRs, randomIO)
 import Control.Lens
 import Data.List.Lens
 
+import Debug.Trace (trace)
+
 import Mnist (NormalizedDataSets)
 import Util (updateAS, modifyA, modifyL, modifyAS)
 
@@ -68,8 +70,8 @@ performNN dataset batsize net = do
     performNNStep :: NN -> (Matrix U, Int) -> Double
     performNNStep n (d, l) = loss d n crossEntropyError l
     loss :: Matrix U -> NN -> LossFunction -> Int -> Double
-    loss input net lossFunc label = flip (calcLoss lossFunc) label $
-                                predict input net
+    loss input n lossFunc label = flip (calcLoss lossFunc) label $
+                                   predict input n
     predict :: Matrix U -> NN -> Matrix U
     predict input n = foldl f input n
       where
@@ -82,18 +84,26 @@ numericalGradient :: Monad m =>
 numericalGradient input net bat = mapM calcGradient [0..len]
   where
     len = length net - 1
+    h :: Double
+    h = 1e-2
+    gradient :: Monad m => [(NN, NN)] -> m [Double]
+    gradient nns = mapM k nns
+      where
+        k :: Monad m => (NN, NN) -> m Double
+        k (l, r) = do
+          a <- performNN input bat l
+          b <- performNN input bat r
+          return $ (b - a) / (2*h)
     calcGradient :: Monad m => Int -> m Gradient
     calcGradient i = do
-      a <- numericalGradient' (diffNNs diffWeights)
-      b <- numericalGradient' (diffNNs diffBiases)
+      a <- gradient (diffNNs diffWeights)
+      b <- gradient (diffNNs diffBiases)
       return (a, b)
       where
         diffNNs :: [(Layer, Layer)] -> [(NN, NN)]
         diffNNs = fmap f
           where
             f (l, r) = (modifyL net i l, modifyL net i r)
-        h :: Double
-        h = 1e-7
         diffWeights, diffBiases :: [(Layer, Layer)]
         diffWeights = let l = net !! i
                           w = weight l
@@ -110,20 +120,11 @@ numericalGradient input net bat = mapM calcGradient [0..len]
                          xs = [0..(size.extent $ b) - 1]
                       in fmap (diffXB l b) xs
         diffXB :: Layer -> Bias -> Int -> (Layer, Layer)
-        diffXB l w n = let newBiases1 = updateAS w n (flip (-) h)
-                           newBiases2 = updateAS w n (+h)
+        diffXB l b n = let newBiases1 = updateAS b n (flip (-) h)
+                           newBiases2 = updateAS b n (+h)
                            newLayer1  = l & _2 .~ newBiases1
                            newLayer2  = l & _2 .~ newBiases2
                        in (newLayer1, newLayer2)
-    numericalGradient' :: Monad m => [(NN, NN)] -> m [Double]
-    numericalGradient' nns = mapM k nns
-      where
-        k :: Monad m => (NN, NN) -> m Double
-        k (l, r) = do
-          a <- performNN input bat l
-          b <- performNN input bat r
-          return $ b - a / (2*h)
-        h = 1e-7
 
 {- | loass function meanSquaredError
 >>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
