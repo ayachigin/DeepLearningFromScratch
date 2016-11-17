@@ -2,6 +2,18 @@ module Util where
 
 import Data.Array.Repa hiding ((++))
 import qualified Data.Array.Repa as R
+import Data.Vector.Unboxed.Base
+
+updateAS :: (Source r e, Shape sh, Unbox e) =>
+            Array r sh e -> Int -> (e -> e) -> Array U sh e
+updateAS a i f = modifyAS a i $ f e
+  where
+    s = extent a
+    e = a ! (fromIndex s i)
+
+modifyAS :: (Source r e, Shape sh, Unbox e) =>
+            Array r sh e -> Int -> e -> Array U sh e
+modifyAS a i v = computeS $ modifyA a i v
 
 modifyA :: (Source r e, Shape sh) =>
           Array r sh e -> Int -> e -> Array D sh e

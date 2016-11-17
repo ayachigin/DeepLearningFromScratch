@@ -1,11 +1,11 @@
 module Mnist
-  ( normalize
-  , choiceIO
-  , toArray
+  ( randomNormalizedDatasets
+  , randomDatasets
   , Label
   , Image
   , NormalizedImage
-  , DataSet) where
+  , NormalizedDataSets
+  , DataSets) where
 
 import qualified Data.ByteString as B
 import System.Random (randomRIO)
@@ -24,12 +24,28 @@ type DataSet = (Image, Label)
 
 type NormalizedDataSet = (NormalizedImage, Label)
 
+type NormalizedDataSets = (Array V DIM1 (Array U DIM2 Double, Label))
+
+type DataSets = (Array V DIM1 (Array U DIM2 Int, Label))
+
 toArray :: (Unbox a) =>
            Int -> [([a], b)] -> Array V DIM1 (Array U DIM2 a, b)
-toArray i ls = v
+toArray idx ls = v
   where
-    v = fromListVector (ix1 i) $ fmap f ls
+    v = fromListVector (ix1 idx) $ fmap f ls
     f (i, l) = (fromListUnboxed (ix2 1 (28 * 28)) i, l)
+
+randomNormalizedDatasets :: Int ->
+                            IO NormalizedDataSets
+randomNormalizedDatasets batsize = do
+  datasets <- fmap (normalize) $ choiceIO batsize
+  return . toArray batsize $ datasets
+
+randomDatasets :: Int ->
+                  IO DataSets
+randomDatasets batsize = do
+  datasets <- choiceIO batsize
+  return . toArray batsize $ datasets
 
 
 normalize :: [DataSet] -> [NormalizedDataSet]
