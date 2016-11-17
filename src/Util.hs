@@ -16,3 +16,9 @@ modifyL :: [a] -> Int -> a -> [a]
 modifyL ls i e = l1++(e:l2)
   where
     (l1, (_:l2)) = splitAt i ls
+
+pickle :: Show a => a -> FilePath -> IO ()
+pickle a f = writeFile f . show $ a
+
+unpickle :: Read a => FilePath -> IO a
+unpickle = fmap read . readFile

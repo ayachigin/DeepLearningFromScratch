@@ -76,14 +76,6 @@ calcLoss f m i = f m $ arr i
     shift (x:xs) n = shift (xs ++ [x]) (n-1)
     bits = [1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-
-
-pickle :: Show a => a -> FilePath -> IO ()
-pickle a f = writeFile f . show $ a
-
-unpickle :: Read a => FilePath -> IO a
-unpickle = fmap read . readFile
-
 matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix U
 matrix shape len range gen = fromListUnboxed shape $
                              take len . randomRs range $ mkStdGen gen
