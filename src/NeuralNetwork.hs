@@ -1,60 +1,47 @@
-module Main where
+module NeuralNetwork where
 
 import Prelude hiding (map, zipWith)
 import Data.Array.Repa hiding ((++))
 import qualified Data.Array.Repa as R
 import Data.Array.Repa.Algorithms.Matrix (mmultS)
-import Data.Array.Repa.Repr.Vector (V, computeVectorP, fromListVector)
-import System.Random (randomRs, mkStdGen)
+import System.Random (mkStdGen, randomRs)
 
-import Mnist (choiceIO, toArray, normalize, Label)
+import Control.Lens
 
-type Matrix = Array U DIM2 Double
+type Matrix r = Array r DIM2 Double
 
 type Vector = Array U DIM1 Double
 
-type Weight = Matrix
+type Weight = Matrix U
 
-type Bias = Matrix
+type Bias = Matrix U
 
-type ActivationFunction = Double -> Double
+type ActivationFunction = Matrix D -> Matrix U
 
 type Layer = (Weight, Bias, ActivationFunction)
 
+type Gradient = (Weight, Bias)
+
+type Gradients = [Gradient]
+
+weight :: Layer -> Weight
+weight = (^._1)
+
+bias :: Layer -> Bias
+bias = (^._2)
+
 type NN = [Layer]
 
-type LossFunction = Matrix -> Matrix -> Double
+type LossFunction = Matrix U -> Matrix U -> Double
 
 batsize :: Int
 batsize = 100
 
-main :: IO ()
-main = do
-  d <- dataset
-  as <- computeVectorP $ map (performNNStep network) d
-  print $ (/(fromIntegral batsize)) . sum . toList $ as
-  where
-    dataset :: IO (Array V DIM1 (Array U DIM2 Double, Label))
-    dataset = do
-      datasets <- fmap (normalize) $ choiceIO batsize
-      return . toArray batsize $ datasets
-    performNNStep :: NN -> (Matrix, Int) -> Double
-    performNNStep n (d, l) =
-      let z = softmax $ performNN d n
-      in calcLoss crossEntropyError z l
-    network = [ (x1, b1, sigmonoid)
-              , (x2, b2, sigmonoid)
-              , (x3, b3, id) ]
-    s1 = 28 * 28 * 50
-    x1 = matrix (ix2 784 50) s1 ((-10), 10.0) 10
-    b1 = matrix (ix2 1 50) 50 (0.0, 1.0) 10
-    x2 = matrix (ix2 50 100) (50*100) ((-10), 100) 30
-    b2 = matrix (ix2 1 100) 100 ((-10), 100) 20
-    x3 = matrix (ix2 100 10) (100 * 10) ((-10), 100) 5
-    b3 = matrix (ix2 1 10) 10 ((-10), 10) 100
+numericalGradient :: Matrix U -> NN -> LossFunction -> Gradients
+numericalGradient input net loss = undefined
 
-numericalGradient :: ([Double] -> Double) -> [Double] -> [Double]
-numericalGradient f (l:ls) = g f [] l ls
+numericalGradient' :: ([Double] -> Double) -> [Double] -> [Double]
+numericalGradient' f (l:ls) = g f [] l ls
   where
     g f left val [] = [diff f left val []]
     g f left val rrs@(r:rs) = diff f left val rrs:
@@ -80,7 +67,7 @@ crossEntropyError x y = (*(-1)) . sumAllS . zipWith (*) y $
   where
     delta = 0.1 ^ 7
 
-calcLoss :: LossFunction -> Matrix -> Int -> Double
+calcLoss :: LossFunction -> Matrix U -> Int -> Double
 calcLoss f m i = f m $ arr i
   where
     arr = fromListUnboxed (ix2 1 10) . shift bits
@@ -97,15 +84,15 @@ pickle a f = writeFile f . show $ a
 unpickle :: Read a => FilePath -> IO a
 unpickle = fmap read . readFile
 
-matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix
+matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix U
 matrix shape len range gen = fromListUnboxed shape $
                              take len . randomRs range $ mkStdGen gen
 
-performNN :: Matrix -> NN -> Matrix
-performNN input n = foldl f input n
+predict :: Matrix U -> NN -> Matrix U
+predict input n = foldl f input n
   where
-    f :: Matrix -> Layer -> Matrix
-    f i (w, b, a) = computeS . map a .
+    f :: Matrix U -> Layer -> Matrix U
+    f i (w, b, a) = a .
                     zipWith (+) b $ mmultS i w
 
 nn :: NN
@@ -117,15 +104,15 @@ nn = [ ( fromListUnboxed (ix2 2 3) [0.1, 0.3, 0.5, 0.2, 0.4, 0.6]
        , sigmonoid )
      , ( fromListUnboxed (ix2 2 2) [0.1, 0.3, 0.2, 0.4]
        , fromListUnboxed (ix2 1 2) [0.1, 0.2]
-       , id)
+       , softmax)
      ]
 
-sigmonoid :: Double -> Double
-sigmonoid x = 1 / (1 + exp (-x))
+sigmonoid :: ActivationFunction
+sigmonoid = computeS.map (\x -> 1 / (1 + exp (-x)))
 
-softmax :: Matrix -> Matrix
+softmax :: ActivationFunction
 softmax x = let c = foldAllS max 0 x
-                expA :: Matrix
+                expA :: Matrix U
                 expA = computeS $ map (\a -> exp $ a - c) x
                 sumExpA = sumAllS expA
             in computeS $ map (/sumExpA) expA

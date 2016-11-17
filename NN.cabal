@@ -23,6 +23,7 @@ executable NN
                      , bytestring
                      , vector
                      , random
+                     , lens
 
 test-suite doctests
   type:            exitcode-stdio-1.0
