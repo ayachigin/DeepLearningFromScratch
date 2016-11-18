@@ -1,10 +1,11 @@
 module NeuralNetwork where
 
 import Prelude hiding (map, zipWith)
+import qualified Prelude
 import Data.Array.Repa hiding ((++))
 import qualified Data.Array.Repa as R
-import Data.Array.Repa.Algorithms.Matrix (mmultS, row, col)
-import Data.Array.Repa.Repr.Vector (V, computeVectorP, fromListVector)
+import Data.Array.Repa.Algorithms.Matrix (mmultS, col)
+import Data.Array.Repa.Repr.Vector (V, computeVectorP)
 import System.Random (mkStdGen, randomRs, randomIO)
 import Control.Lens
 import Data.List.Lens
@@ -86,29 +87,28 @@ numericalGradient input net bat = mapM calcGradient [0..len]
     len = length net - 1
     h :: Double
     h = 1e-2
-    gradient :: Monad m => [(NN, NN)] -> m [Double]
-    gradient nns = mapM k nns
-      where
-        k :: Monad m => (NN, NN) -> m Double
-        k (l, r) = do
-          a <- performNN input bat l
-          b <- performNN input bat r
-          return $ (b - a) / (2*h)
     calcGradient :: Monad m => Int -> m Gradient
     calcGradient i = do
-      a <- gradient (diffNNs diffWeights)
-      b <- gradient (diffNNs diffBiases)
-      return (a, b)
+      a <- diffWeights
+      b <- diffBiases
+      return ( a
+             , b)
       where
-        diffNNs :: [(Layer, Layer)] -> [(NN, NN)]
-        diffNNs = fmap f
-          where
-            f (l, r) = (modifyL net i l, modifyL net i r)
-        diffWeights, diffBiases :: [(Layer, Layer)]
+        thisLayer = net !! i
+        shW = extent . weight $ thisLayer
+        shB = extent . bias   $ thisLayer
+        diffNNs :: Monad m => [(Layer, Layer)] -> m [Double]
+        diffNNs = mapM f
+        f :: Monad m => (Layer, Layer) -> m Double
+        f (l, r) = do
+          a <- performNN input bat (modifyL net i l)
+          b <- performNN input bat (modifyL net i r)
+          return $ (b - a) / (2*h)
+        diffWeights, diffBiases :: Monad m => m [Double]
         diffWeights = let l = net !! i
                           w = weight l
                           xs = [0..(size.extent $ w) - 1]
-                      in fmap (diffXW l w) xs
+                      in mapM (f . (diffXW l w)) xs
         diffXW :: Layer -> Weight -> Int -> (Layer, Layer)
         diffXW l w n = let newWeight1 = updateAS w n (flip (-) h)
                            newWeight2 = updateAS w n (+h)
@@ -118,13 +118,38 @@ numericalGradient input net bat = mapM calcGradient [0..len]
         diffBiases = let l = net !! i
                          b = bias l
                          xs = [0..(size.extent $ b) - 1]
-                      in fmap (diffXB l b) xs
+                      in mapM (f . (diffXB l b)) xs
         diffXB :: Layer -> Bias -> Int -> (Layer, Layer)
         diffXB l b n = let newBiases1 = updateAS b n (flip (-) h)
                            newBiases2 = updateAS b n (+h)
                            newLayer1  = l & _2 .~ newBiases1
                            newLayer2  = l & _2 .~ newBiases2
                        in (newLayer1, newLayer2)
+
+gradientDescent :: Monad m => Double -> NN -> Gradients -> m NN
+gradientDescent learningRate = (mapM f .) . zip
+  where
+    f :: Monad m => (Layer, Gradient) -> m Layer
+    f ((w, b, a), (gw, gb)) = do
+      w' <- computeP $ w -^ gw'
+      b' <- computeP $ b -^ gb'
+      return (w', b', a)
+      where
+        shW = extent w
+        shB = extent b
+        gw', gb' :: Matrix D
+        gw' = map (*learningRate) $ fromListUnboxed shW gw
+        gb' = map (*learningRate) $ fromListUnboxed shB gb
+
+{-
+dummy :: Monad m => NN -> m Gradients
+dummy = mapM f
+  where
+    f (w, b, _) = do
+      w' <- computeP $ map (+0.001) w
+      b' <- computeP $ map (+0.02) b
+      return (w', b')
+-}
 
 {- | loass function meanSquaredError
 >>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
