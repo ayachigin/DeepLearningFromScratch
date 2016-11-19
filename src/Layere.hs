@@ -72,3 +72,12 @@ sigmonoidB douts = do
   outs <- get
   put $ map f . zip douts $ outs
   where f (d, o) = d * (1.0 - o) * o
+
+affineF :: (Matrix, Matrix, Matrix) ->
+           ( Array D DIM2 Double,
+            (Matrix, Matrix, Matrix))
+affineF (w, b, x) = ((mmultS x w) +^ b, (w, b, x))
+
+affineFS :: Monad m =>
+            StateT (Matrix, Matrix, Matrix) m (Array D DIM2 Double)
+affineFS = state affineF
