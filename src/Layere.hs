@@ -50,3 +50,11 @@ addF = fmap (uncurry (+)) get
 
 addB :: BackwardB
 addB d = put (d, d)
+
+reLUF :: ForwardL
+reLUF = fmap (map (\x -> if x > 0 then x else 0)) get
+
+reLUB :: BackwardL
+reLUB douts = do
+  inputs <- get
+  put $ map (\(x, y) -> if x > 0 then y else 0) . zip inputs $ douts
