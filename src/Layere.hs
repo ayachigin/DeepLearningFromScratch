@@ -58,3 +58,17 @@ reLUB :: BackwardL
 reLUB douts = do
   inputs <- get
   put $ map (\(x, y) -> if x > 0 then y else 0) . zip inputs $ douts
+
+sigmonoidF :: ForwardL
+sigmonoidF = do
+  ls <- get
+  let out = map f ls
+  put out
+  return out
+  where f x = 1 / (1 + exp(-x))
+
+sigmonoidB :: BackwardL
+sigmonoidB douts = do
+  outs <- get
+  put $ map f . zip douts $ outs
+  where f (d, o) = d * (1.0 - o) * o
