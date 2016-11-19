@@ -81,3 +81,26 @@ affineF (w, b, x) = ((mmultS x w) +^ b, (w, b, x))
 affineFS :: Monad m =>
             StateT (Matrix, Matrix, Matrix) m (Array D DIM2 Double)
 affineFS = state affineF
+
+affineB :: Source r Double =>
+           Matrix ->
+           ( Array r DIM2 Double, t, Array r DIM2 Double) ->
+           ((), (Matrix, Matrix, Matrix))
+affineB dout (w, _, x) = let dX = mmultS dout (ts w)
+                             dW = mmultS (ts x) dout
+                             dB = mapSum dout
+                         in ((), (dB, dW, dX))
+  where ts = computeS . transpose
+
+affineBS :: Monad m =>
+            Matrix ->
+            StateT (Matrix, Matrix, Matrix) m ()
+affineBS = \x -> state (affineB x)
+
+mapSum :: Matrix -> Matrix
+mapSum xs = fromListUnboxed (ix2 1 c) $ map f [0..c-1]
+  where sh = extent xs
+        c = col sh
+        r = row sh
+        f x = foldl (g x) 0 [0..r-1]
+        g x acc y = acc + (xs `index` ix2 x y)
