@@ -2,8 +2,9 @@ module Main where
 
 import System.IO (stdout, hFlush)
 import Control.Monad (foldM_)
+import Data.Array.Repa (fromListUnboxed, ix2)
 
-import Mnist (randomNormalizedDatasets, NormalizedDataSets)
+import Mnist (randomNormalizedDataset, NormalizedDataSet)
 import NeuralNetwork
 
 import Util
@@ -19,9 +20,11 @@ iterNum = 500
 
 main :: IO ()
 main = do
-  n <- readNN--network [100, 50, 10] ((-1), 1)
-  foldM_(\m _ -> learnStep m) n [1..iterNum]
-  print "Done"
+  let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
+  let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
+  let e = crossEntropyError y t 2
+
+  print $ e =~ 0.857399214046 $ 3
   where
     readNN :: IO NN
     readNN = do
@@ -30,17 +33,6 @@ main = do
     g (w, b) = (w, b, sigmonoid)
     k ls = updateL ls (length ls-1) (\(w, b, _) -> (w, b, softmax))
     f (w, b, _) = (w, b)
-    learnStep :: NN -> IO NN
-    learnStep n = do
-      d <- dataset
-      g <- numericalGradient d n batsize
-      p "gradient"
-      n' <- gradientDescent learningRate n g
-      p "apply gradient"
-      pickle (fmap f n') "nn"
-      r <- performNN d batsize n'
-      p r
-      return n'
     p s = print s >> hFlush stdout
-    dataset :: IO NormalizedDataSets
-    dataset = randomNormalizedDatasets batsize
+    dataset :: IO NormalizedDataSet
+    dataset = randomNormalizedDataset batsize

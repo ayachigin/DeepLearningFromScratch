@@ -37,3 +37,5 @@ pickle a f = writeFile f . show $ a
 
 unpickle :: Read a => FilePath -> IO a
 unpickle = fmap read . readFile
+
+a =~ b = \x -> floor (a*10^x) == floor (b*10^x)
