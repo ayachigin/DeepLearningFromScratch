@@ -97,11 +97,11 @@ accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
   where
     a = sum $ zipWith (*) (argMax label) (argMax x)
     argMax :: Matrix U -> [Int]
-    argMax arr = mapRow (\x -> foldCol (g x) 0 arr)
+    argMax arr = mapRow (\i -> foldCol (g i) 0 arr)
       where
         g :: Int -> Int -> Int -> Int
-        g x y z = let ay = index arr (ix2 x y)
-                      az = index arr (ix2 x z)
+        g i y z = let ay = index arr (ix2 i y)
+                      az = index arr (ix2 i z)
                   in if ay >= az then y else z
     mapRow f = fmap f [0..r-1]
     foldCol :: (Int -> Int -> Int) -> Int -> Matrix U -> Int
