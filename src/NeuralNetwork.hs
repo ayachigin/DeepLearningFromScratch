@@ -95,7 +95,7 @@ loss (input, label) batsize nn = crossEntropyError x label batsize
 accuracy :: NormalizedDataSet -> Int -> NN -> Double
 accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
   where
-    a = sum $ zipWith (*) (argMax label) (argMax x)
+    a = length . filter id $ zipWith (==) (argMax label) (argMax x)
     argMax :: Matrix U -> [Int]
     argMax arr = mapRow (\i -> foldCol (g i) 0 arr)
       where
@@ -126,10 +126,10 @@ performNN dataset batsize net = do
         f i (w, b, a) = a .
                         zipWith (+) b $ mmultS i w
 ---}
-{-
+--{-
 numericalGradient :: Monad m =>
-                     NormalizedDataSets -> NN -> Int -> m Gradients
-numericalGradient input net bat = mapM calcGradient [0..len]
+                     NormalizedDataSet -> Int -> NN -> m Gradients
+numericalGradient input bat net = mapM calcGradient [0..len]
   where
     len = length net - 1
     h :: Double
@@ -141,15 +141,10 @@ numericalGradient input net bat = mapM calcGradient [0..len]
       return ( a
              , b)
       where
-        thisLayer = net !! i
-        shW = extent . weight $ thisLayer
-        shB = extent . bias   $ thisLayer
-        diffNNs :: Monad m => [(Layer, Layer)] -> m [Double]
-        diffNNs = mapM f
         f :: Monad m => (Layer, Layer) -> m Double
         f (l, r) = do
-          a <- performNN input bat (modifyL net i l)
-          b <- performNN input bat (modifyL net i r)
+          let a = loss input bat (modifyL net i l)
+          let b = loss input bat (modifyL net i r)
           return $ (b - a) / (2*h)
         diffWeights, diffBiases :: Monad m => m [Double]
         diffWeights = let l = net !! i
