@@ -2,7 +2,9 @@ module Main where
 
 import System.IO (stdout, hFlush)
 import Control.Monad (foldM_)
-import Data.Array.Repa (fromListUnboxed, ix2)
+import Data.Array.Repa hiding (map, zipWith)
+import qualified Data.Array.Repa as R
+import Data.Array.Repa.Algorithms.Matrix (row, col, mmultS)
 
 import Mnist (randomNormalizedDataset, NormalizedDataSet)
 import NeuralNetwork
@@ -10,7 +12,7 @@ import NeuralNetwork
 import Util
 
 batsize :: Int
-batsize = 200
+batsize = 100
 
 learningRate :: Double
 learningRate = 0.1
@@ -20,11 +22,10 @@ iterNum = 500
 
 main :: IO ()
 main = do
-  let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
-  let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
-  let e = crossEntropyError y t 2
-
-  print $ e =~ 0.857399214046 $ 3
+  d <- dataset
+  n <- network [28*28, 100, 10] ((-1.0), 1.0)
+  print $ accuracy d batsize n
+  print $ loss d batsize n
   where
     readNN :: IO NN
     readNN = do

@@ -21,7 +21,7 @@ type NormalizedImage = Array U DIM2 Double
 
 type DataSet = (Array U DIM2 Int, Array U DIM2 Double)
 
-type NormalizedDataSet = (Array D DIM2 Double, Array U DIM2 Double)
+type NormalizedDataSet = (Array U DIM2 Double, Array U DIM2 Double)
 
 randomNormalizedDataset :: Int ->
                             IO NormalizedDataSet
@@ -38,7 +38,7 @@ randomDataSet n  = do
     randomRIOs b = replicateM n (randomRIO $ range b)
 
 normalize :: DataSet -> NormalizedDataSet
-normalize (i, l) = (map ((/255).fromIntegral) i, l)
+normalize (i, l) = (computeS $ map ((/255).fromIntegral) i, l)
 
 choice' :: (B.ByteString, B.ByteString) -> [Int] -> DataSet
 choice' (i, l) idxs = (imgs, labels)

@@ -1,14 +1,15 @@
+{-# LANGUAGE FlexibleContexts #-}
 module NeuralNetwork where
 
-import Prelude hiding (map, zipWith)
+import Prelude hiding (map)
 import qualified Prelude
-import Data.Array.Repa hiding ((++))
+import Data.Array.Repa hiding ((++), zipWith)
 import qualified Data.Array.Repa as R
-import Data.Array.Repa.Algorithms.Matrix (mmultS, col)
+import Data.Array.Repa.Algorithms.Matrix (mmultS, row, col)
 import Data.Array.Repa.Repr.Vector (V, computeVectorP)
 import System.Random (mkStdGen, randomRs, randomIO)
-import Control.Lens
-import Data.List.Lens
+import Control.Lens hiding (index)
+--import Data.List.Lens
 
 import Debug.Trace (trace)
 
@@ -63,18 +64,50 @@ network (x1:x2:xs) range = do
       l <- a
       g (col.extent.weight $ l) b
 
+(+^^) :: (Source r1 Double, Source r2 Double) =>
+      Array r1 DIM2 Double -> Array r2 DIM2 Double -> Array D DIM2 Double
+(+^^) x b = if r == 1 then
+              fromFunction shx f
+            else
+              x +^ b
+  where
+    r = row . extent $ b
+    shx = extent x
+    f :: DIM2 -> Double
+    f sh = (index x sh) + (g sh)
+    g :: DIM2 -> Double
+    g sh = index b (ix2 0 c)
+      where c = col sh
+
+
 predict :: Matrix U -> NN -> Matrix U
 predict input n = foldl f input n
   where
     f :: Matrix U -> Layer -> Matrix U
     f i (w, b, a) = a .
-                    zipWith (+) b $ mmultS i w
+                   (+^^b) $ mmultS i w
 
 loss :: NormalizedDataSet -> Int -> NN -> Double
 loss (input, label) batsize nn = crossEntropyError x label batsize
   where
-    x = predict (computeS input) nn
+    x = predict input nn
 
+accuracy :: NormalizedDataSet -> Int -> NN -> Double
+accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
+  where
+    a = sum $ zipWith (*) (argMax label) (argMax x)
+    argMax :: Matrix U -> [Int]
+    argMax arr = mapRow (\x -> foldCol (g x) 0 arr)
+      where
+        g :: Int -> Int -> Int -> Int
+        g x y z = let ay = index arr (ix2 x y)
+                      az = index arr (ix2 x z)
+                  in if ay >= az then y else z
+    mapRow f = fmap f [0..r-1]
+    foldCol :: (Int -> Int -> Int) -> Int -> Matrix U -> Int
+    foldCol f b arr = foldr f b [1..((col.extent$arr)-1)]
+    x = predict input nn
+    r = row . extent $ label
 {-
 performNN :: Monad m => NormalizedDataSet -> Int -> NN -> m Double
 performNN dataset batsize net = do
@@ -92,7 +125,8 @@ performNN dataset batsize net = do
         f :: Matrix U -> Layer -> Matrix U
         f i (w, b, a) = a .
                         zipWith (+) b $ mmultS i w
-
+---}
+{-
 numericalGradient :: Monad m =>
                      NormalizedDataSets -> NN -> Int -> m Gradients
 numericalGradient input net bat = mapM calcGradient [0..len]
@@ -165,31 +199,22 @@ gradientDescent learningRate = (mapM f .) . zip
 9.750000000000003e-2
 -}
 meanSquaredError :: LossFunction
-meanSquaredError x y n = (0.5 * (sumAllS $ zipWith (\a b -> (a-b)^2) x y))/
+meanSquaredError x y n = (0.5 * (sumAllS $ R.zipWith (\a b -> (a-b)^2) x y))/
                          fromIntegral n
 
 
 {- | crossEntropyError
+>>> import Util (=~)
 >>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
 >>> let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
->>> crossEntropyError y t
+>>> crossEntropyError y t =~ 0.857399 $ 3
+True
 -}
 crossEntropyError :: LossFunction
-crossEntropyError y t n = ((*(-1)) . sumAllS . zipWith (*) t $
+crossEntropyError y t n = ((*(-1)) . sumAllS . (*^t) $
                            map (log . (+delta)) y) / fromIntegral n
   where
     delta = 1e-4
-
-{-
-calcLoss :: LossFunction -> Matrix U -> Int -> Double
-calcLoss f m i = f m $ arr i
-  where
-    arr = fromListUnboxed (ix2 1 10) . shift bits
-    shift [] _ = error "Shift empty list"
-    shift ls 0 = ls
-    shift (x:xs) n = shift (xs ++ [x]) (n-1)
-    bits = [1.0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
--}
 
 matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix U
 matrix shape len range gen = fromListUnboxed shape $
