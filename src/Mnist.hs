@@ -1,66 +1,34 @@
 module Mnist
-  ( randomNormalizedDatasets
-  , randomDatasets
+  ( randomNormalizedDataset
+  , randomDataSet
   , Label
   , Image
   , NormalizedImage
-  , NormalizedDataSets
-  , DataSets) where
+  , NormalizedDataSet
+  , DataSet) where
 
+import Prelude hiding (map)
 import qualified Data.ByteString as B
 import System.Random (randomRIO)
 import Control.Monad (replicateM)
-import Data.Array.Repa hiding (map)
-import Data.Array.Repa.Repr.Vector
-import Data.Vector.Unboxed.Base (Unbox)
+import Data.Array.Repa hiding ((++))
 
 type Label = Int
 
-type Image = [Int]
+type Image = Array U DIM2 Int
 
-type NormalizedImage = [Double]
+type NormalizedImage = Array U DIM2 Double
 
-type DataSet = (Image, Label)
+type DataSet = (Array U DIM2 Int, Array U DIM2 Double)
 
-type NormalizedDataSet = (NormalizedImage, Label)
+type NormalizedDataSet = (Array U DIM2 Double, Array U DIM2 Double)
 
-type NormalizedDataSets = (Array V DIM1 (Array U DIM2 Double, Label))
+randomNormalizedDataset :: Int ->
+                            IO NormalizedDataSet
+randomNormalizedDataset batsize = fmap (normalize) $ randomDataSet batsize
 
-type DataSets = (Array V DIM1 (Array U DIM2 Int, Label))
-
-toArray :: (Unbox a) =>
-           Int -> [([a], b)] -> Array V DIM1 (Array U DIM2 a, b)
-toArray idx ls = v
-  where
-    v = fromListVector (ix1 idx) $ fmap f ls
-    f (i, l) = (fromListUnboxed (ix2 1 (28 * 28)) i, l)
-
-randomNormalizedDatasets :: Int ->
-                            IO NormalizedDataSets
-randomNormalizedDatasets batsize = do
-  datasets <- fmap (normalize) $ choiceIO batsize
-  return . toArray batsize $ datasets
-
-randomDatasets :: Int ->
-                  IO DataSets
-randomDatasets batsize = do
-  datasets <- choiceIO batsize
-  return . toArray batsize $ datasets
-
-
-normalize :: [DataSet] -> [NormalizedDataSet]
-normalize = map (\(x, y) -> (map ((/255).fromIntegral) x, y))
-
-choice' :: (B.ByteString, B.ByteString) -> [Int] -> [DataSet]
-choice' (i, l) idxs = map (\n -> (takeImage n i, takeLabel n l)) idxs
-  where
-    takeImage n = map fromIntegral . B.unpack . B.take (28 * 28) .
-                  B.drop (28 * 28 * n)
-    takeLabel n = fromIntegral  . B.head . B.drop n
-    --fromList $ fmap (vec !) idxs
-
-choiceIO :: Int -> IO [DataSet]
-choiceIO n  = do
+randomDataSet :: Int -> IO DataSet
+randomDataSet n  = do
   (is, ls) <- readTrainDataSets
   idxs <- randomRIOs is
   return $ choice' (B.drop 16 is, B.drop 8 ls) idxs
@@ -69,6 +37,25 @@ choiceIO n  = do
     range b = (0, len b - 1)
     randomRIOs b = replicateM n (randomRIO $ range b)
 
+normalize :: DataSet -> NormalizedDataSet
+normalize (i, l) = (computeS $ map ((/255).fromIntegral) i, l)
+
+choice' :: (B.ByteString, B.ByteString) -> [Int] -> DataSet
+choice' (i, l) idxs = (imgs, labels)
+--  map (\n -> (takeImage n i, takeLabel n l)) idxs
+  where
+    len = length idxs
+    imgs = fromListUnboxed (ix2 len (28*28)) $
+           concat [takeImage n i | n <-idxs]
+    labels = fromListUnboxed (ix2 len 10) $
+             concat [takeLabel n l | n <- idxs]
+    takeImage n = fmap fromIntegral . B.unpack . B.take (28 * 28) .
+                  B.drop (28 * 28 * n)
+    takeLabel n = shift bits . fromIntegral  . B.head . B.drop n
+    shift [] _ = error "Shift empty list"
+    shift ls 0 = ls
+    shift (x:xs) n = shift (xs ++ [x]) (n-1)
+    bits = [(1.0::Double), 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 readTrainDataSets :: IO (B.ByteString, B.ByteString)
 readTrainDataSets  = do
