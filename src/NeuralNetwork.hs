@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 module NeuralNetwork where
 
-import Prelude hiding (map)
+import Prelude hiding (map, traverse)
 import qualified Prelude
 import Data.Array.Repa hiding ((++), zipWith)
 import qualified Data.Array.Repa as R
@@ -219,7 +219,10 @@ sigmonoid :: ActivationFunction
 sigmonoid = computeS . map (\x -> 1 / (1 + exp (-x)))
 
 softmax :: ActivationFunction
-softmax x = let c = foldAllS max 0 x
-                expA = map (\a -> exp $ a - c) x
-                sumExpA = sumAllS expA
-            in computeS $ map (/sumExpA) expA
+softmax x = computeS $ expY /^  sumExpY
+  where
+    maxX2 = R.traverse x id (f (foldS max 0 x))
+    y = x -^ maxX2 -- For overflow countermeasure
+    expY = map exp y
+    sumExpY = R.traverse expY id (f (foldS (+) 0 expY))
+    f arr _ (Z:.i:._) = index arr (ix1 i)
