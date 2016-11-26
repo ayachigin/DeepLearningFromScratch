@@ -6,15 +6,13 @@ import qualified Prelude
 import Data.Array.Repa hiding ((++), zipWith)
 import qualified Data.Array.Repa as R
 import Data.Array.Repa.Algorithms.Matrix (mmultS, row, col)
-import Data.Array.Repa.Repr.Vector (V, computeVectorP)
 import System.Random (mkStdGen, randomRs, randomIO)
 import Control.Lens hiding (index)
---import Data.List.Lens
 
 import Debug.Trace (trace)
 
 import Mnist (NormalizedDataSet)
-import Util (updateAS, modifyA, modifyL, modifyAS)
+import Util (updateAS, modifyL, (=~))
 
 type Matrix r = Array r DIM2 Double
 
@@ -39,8 +37,6 @@ bias :: Layer -> Bias
 bias = (^._2)
 
 type NN = [Layer]
-
-type NNs = Array V DIM1 NN
 
 type LossFunction = Matrix U -> Matrix U -> Int -> Double
 
@@ -108,25 +104,7 @@ accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
     foldCol f b arr = foldr f b [1..((col.extent$arr)-1)]
     x = predict input nn
     r = row . extent $ label
-{-
-performNN :: Monad m => NormalizedDataSet -> Int -> NN -> m Double
-performNN dataset batsize net = do
-  as <- computeVectorP $ map (performNNStep net) dataset
-  return $ (/(fromIntegral batsize)) . sum . toList $ as
-  where
-    performNNStep :: NN -> (Matrix U, Int) -> Double
-    performNNStep n (d, l) = loss d n crossEntropyError l
-    loss :: Matrix U -> NN -> LossFunction -> Int -> Double
-    loss input n lossFunc label = flip (calcLoss lossFunc) label $
-                                   predict input n
-    predict :: Matrix U -> NN -> Matrix U
-    predict input n = foldl f input n
-      where
-        f :: Matrix U -> Layer -> Matrix U
-        f i (w, b, a) = a .
-                        zipWith (+) b $ mmultS i w
----}
---{-
+
 numericalGradient :: Monad m =>
                      NormalizedDataSet -> Int -> NN -> m Gradients
 numericalGradient input bat net = mapM calcGradient [0..len]
@@ -184,25 +162,15 @@ gradientDescent learningRate = (mapM f .) . zip
         gb' = map (*learningRate) $ fromListUnboxed shB gb
 ---}
 
-{- | loass function meanSquaredError
->>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.1, 0, 0.05, 0.1, 0, 0.6, 0, 0]
->>> let t = fromListUnboxed (ix2 1 10) [0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
->>> meanSquaredError y t
-0.5974999999999999
->>> let y = fromListUnboxed (ix2 1 10) [0.1, 0.05, 0.6, 0, 0.05, 0.1, 0, 0.1, 0, 0]
->>> meanSquaredError y t
-9.750000000000003e-2
--}
 meanSquaredError :: LossFunction
 meanSquaredError x y n = (0.5 * (sumAllS $ R.zipWith (\a b -> (a-b)^2) x y))/
                          fromIntegral n
 
 
 {- | crossEntropyError
->>> import Util (=~)
 >>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
 >>> let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
->>> crossEntropyError y t =~ 0.857399 $ 3
+>>> crossEntropyError y t 2 =~ 0.857399 $ 3
 True
 -}
 crossEntropyError :: LossFunction
@@ -218,6 +186,11 @@ matrix shape len range gen = fromListUnboxed shape $
 sigmonoid :: ActivationFunction
 sigmonoid = computeS . map (\x -> 1 / (1 + exp (-x)))
 
+{- | softmax
+>>> let x = fromListUnboxed (ix2 2 3) [(1::Double)..6]
+>>> 2 =~ sumAllS (softmax (delay x)) $ 2
+True
+-}
 softmax :: ActivationFunction
 softmax x = computeS $ expY /^  sumExpY
   where

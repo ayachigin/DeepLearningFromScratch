@@ -38,4 +38,9 @@ pickle a f = writeFile f . show $ a
 unpickle :: Read a => FilePath -> IO a
 unpickle = fmap read . readFile
 
-a =~ b = \x -> floor (a*10^x) == floor (b*10^x)
+
+
+(=~) :: (Ord a, Fractional a) => a -> a -> Int -> Bool
+a =~ b = f
+  where f x = a <= (b + (0.1^(x))) &&
+              a >= (b - (0.1^(x)))
