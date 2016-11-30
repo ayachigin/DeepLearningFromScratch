@@ -1,4 +1,4 @@
-module Types where
+module BackProp where
 
 
 import Prelude hiding (map, zipWith)
