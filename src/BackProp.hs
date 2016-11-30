@@ -14,7 +14,7 @@ import Prelude hiding (map, zipWith)
 import Data.Array.Repa hiding ((++))
 import Data.Array.Repa.Algorithms.Matrix
 
-import Functions (softmax, crossEntropyError)
+import Functions (softmax, crossEntropyError, (+^^))
 
 
 data Forward
@@ -71,7 +71,7 @@ affineForward :: Input -> Weight -> Bias ->
                  (LayerOutput, Layer Backward)
 affineForward i w b = (OutputMatrix (delay x), Affine w b x)
   where i' = computeS i
-        x = (mmultS i' w) +^ b
+        x = (mmultS i' w) +^^ b
 
 softmaxForward :: Matrix2DD -> Matrix2DU ->
                   (LayerOutput, Layer Backward)

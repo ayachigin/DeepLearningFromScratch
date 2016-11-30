@@ -1,14 +1,37 @@
+{-# LANGUAGE FlexibleContexts #-}
 module Functions
   ( meanSquaredError
   , crossEntropyError
   , sigmonoid
-  , softmax)
+  , softmax
+  , (+^^))
   where
 
 import Prelude hiding (map, zipWith, traverse)
 import Data.Array.Repa hiding ((++))
+import Data.Array.Repa.Algorithms.Matrix
 
 type Matrix r = Array r DIM2 Double
+
+-- | +^^
+-- >>> let a = fromListUnboxed (ix2 2 3) [(1::Double)..6]
+-- >>> let b = fromListUnboxed (ix2 1 3) [(1::Double)..3]
+-- >>> toList $ a +^^ b
+-- [2.0,4.0,6.0,5.0,7.0,9.0]
+(+^^) :: (Source r1 Double, Source r2 Double) =>
+      Array r1 DIM2 Double -> Array r2 DIM2 Double -> Array D DIM2 Double
+(+^^) x b = if r == 1 then
+              fromFunction shx f
+            else
+              x +^ b
+  where
+    r = row . extent $ b
+    shx = extent x
+    f :: DIM2 -> Double
+    f sh = (index x sh) + (g sh)
+    g :: DIM2 -> Double
+    g sh = index b (ix2 0 c)
+      where c = col sh
 
 meanSquaredError :: Matrix U -> Matrix U -> Int -> Double
 meanSquaredError x y n = (0.5 * (sumAllS $ zipWith (\a b -> (a-b)^2) x y))/

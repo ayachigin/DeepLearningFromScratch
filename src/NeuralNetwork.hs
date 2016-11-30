@@ -16,7 +16,8 @@ import Util (updateAS, modifyL)
 import Functions ( meanSquaredError
                  , crossEntropyError
                  , sigmonoid
-                 , softmax)
+                 , softmax
+                 , (+^^))
 
 import qualified BackProp as BackProp
 
@@ -84,21 +85,6 @@ nnb [(w, b, _)] = [BackProp.Affine w b undefined]
 nnb ((w, b, _):xs) = [ BackProp.Affine w b undefined
                      , BackProp.ReLU undefined] ++ nnb xs
 
-(+^^) :: (Source r1 Double, Source r2 Double) =>
-      Array r1 DIM2 Double -> Array r2 DIM2 Double -> Array D DIM2 Double
-(+^^) x b = if r == 1 then
-              fromFunction shx f
-            else
-              x +^ b
-  where
-    r = row . extent $ b
-    shx = extent x
-    f :: DIM2 -> Double
-    f sh = (index x sh) + (g sh)
-    g :: DIM2 -> Double
-    g sh = index b (ix2 0 c)
-      where c = col sh
-
 predictB :: Matrix D -> NNB ->
             (Matrix D, [BackProp.Layer BackProp.Backward])
 predictB input n = foldl f (input, []) n
@@ -106,7 +92,7 @@ predictB input n = foldl f (input, []) n
           where (BackProp.OutputMatrix i', s) = BackProp.forward i x
 
 -- | lossB
--- >>> fst (lossB (y, t) 2 nb) =~ loss (y, t) 2 n $ 2
+-- >>> fst (lossB (y, t) 2 nb) =~ loss (y, t) 2 n $ 1
 -- True
 lossB :: NormalizedDataSet -> Int -> NNB ->
          (Double, [BackProp.Layer BackProp.Backward])
@@ -115,6 +101,15 @@ lossB (input, label) _ n = (l, b:bs)
         (BackProp.OutputDouble l, b) =
           BackProp.forward x (BackProp.SoftmaxWithLoss label undefined)
 
+-- | accuracyB
+-- >>> accuracyB (y, t) 2 nb == accuracy (y, t) 2 n
+-- True
+accuracyB :: NormalizedDataSet -> Int -> NNB -> Double
+accuracyB (i, l) bat n = accuracy' l (computeS x) bat
+  where
+    (x, _) = predictB (delay i) n
+
+
 predict :: Matrix U -> NN -> Matrix U
 predict input n = foldl f input n
   where
@@ -122,13 +117,21 @@ predict input n = foldl f input n
     f i (w, b, a) = a .
                    (+^^b) $ mmultS i w
 
+-- | loss
+-- >>> loss (y, t) 2 n =~ 0.6928875360459781 $ 2
+-- True
 loss :: NormalizedDataSet -> Int -> NN -> Double
 loss (input, label) batsize nn = crossEntropyError x label batsize
   where
     x = predict input nn
 
 accuracy :: NormalizedDataSet -> Int -> NN -> Double
-accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
+accuracy (input, label) batsize nn = accuracy' label
+                                               (predict input nn)
+                                               batsize
+
+accuracy' :: Matrix U -> Matrix U -> Int -> Double
+accuracy' label x batsize = fromIntegral a / fromIntegral batsize
   where
     a = length . filter id $ zipWith (==) (argMax label) (argMax x)
     argMax :: Matrix U -> [Int]
@@ -141,7 +144,6 @@ accuracy (input, label) batsize nn = fromIntegral a / fromIntegral batsize
     mapRow f = fmap f [0..r-1]
     foldCol :: (Int -> Int -> Int) -> Int -> Matrix U -> Int
     foldCol f b arr = foldr f b [1..((col.extent$arr)-1)]
-    x = predict input nn
     r = row . extent $ label
 
 numericalGradient :: Monad m =>
