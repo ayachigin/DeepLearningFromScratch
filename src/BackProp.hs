@@ -6,12 +6,15 @@ module BackProp
   , forward
   , backward
   , softmaxForward
-  , softmaxBackward) where
+  , softmaxBackward
+  , LayerOutput(..)) where
 
 
 import Prelude hiding (map, zipWith)
-import Data.Array.Repa
+import Data.Array.Repa hiding ((++))
 import Data.Array.Repa.Algorithms.Matrix
+
+import Functions (softmax, crossEntropyError)
 
 
 data Forward
@@ -28,6 +31,13 @@ type Input = Matrix2DD
 
 type Output = Matrix2DD
 
+data LayerOutput = OutputMatrix Matrix2DD
+                 | OutputDouble Double
+
+instance Show LayerOutput where
+  show (OutputMatrix _) = "LayerOutput (Array D DIM2 Double)"
+  show (OutputDouble d) = "LayerOutput " ++ show d
+
 type Weight = Matrix2DU
 
 type Bias = Matrix2DU
@@ -37,41 +47,45 @@ type Dout = Matrix2DD
 data Layer a = Affine Weight Bias Input
              | Sigmonoid Matrix2DD
              | ReLU Matrix2DD
+             | SoftmaxWithLoss Matrix2DU Matrix2DU
              | None
 
-forward :: Input -> Layer Forward -> (Input, Layer Backward)
+forward :: Input -> Layer Forward -> (LayerOutput, Layer Backward)
 forward i (ReLU _)              = reluForward i
 forward i (Sigmonoid _)         = sigmonoidForward i
 forward i (Affine w b _)        = affineForward i w b
-forward _ None                  = error "None is not valid layer"
+forward i (SoftmaxWithLoss t _) = softmaxForward i t
+forward _ None                  = error "Invalid Layer None"
 
-reluForward :: Input -> (Output, Layer Backward)
-reluForward i = (out, ReLU i)
+reluForward :: Input -> (LayerOutput, Layer Backward)
+reluForward i = (OutputMatrix out, ReLU i)
   where
     out  = map (\x -> if x <= 0 then 0 else x) i
 
-sigmonoidForward :: Input -> (Output, Layer Backward)
-sigmonoidForward i = (out, Sigmonoid out)
+sigmonoidForward :: Input -> (LayerOutput, Layer Backward)
+sigmonoidForward i = (OutputMatrix out, Sigmonoid out)
   where out = map f i
         f x = 1 / (1 + exp(-x))
 
-affineForward :: Input -> Weight -> Bias -> (Output, Layer Backward)
-affineForward i w b = (delay x, Affine w b x)
+affineForward :: Input -> Weight -> Bias ->
+                 (LayerOutput, Layer Backward)
+affineForward i w b = (OutputMatrix (delay x), Affine w b x)
   where i' = computeS i
         x = (mmultS i' w) +^ b
 
-softmaxForward :: Matrix2DD -> Matrix2DD -> (Double, Matrix2DD)
-softmaxForward x t = (loss, y)
-  where y = softmax x
-        loss = crossEntropyError y t
-        softmax = undefined
-        crossEntropyError = undefined
+softmaxForward :: Matrix2DD -> Matrix2DU ->
+                  (LayerOutput, Layer Backward)
+softmaxForward x t = (OutputDouble loss, SoftmaxWithLoss y t)
+  where r = row . extent $ x
+        y = softmax x
+        loss = crossEntropyError y t r
 
 backward :: Dout -> Layer Backward -> (Dout, Layer Gradient)
-backward dout (ReLU i)       = reluBackward dout i
-backward dout (Sigmonoid i)  = sigmonoidBackward dout i
-backward dout (Affine w _ x) = affineBackward dout w x
-backward _     None           = error "None is not valid layer"
+backward dout (ReLU i)              = reluBackward dout i
+backward dout (Sigmonoid i)         = sigmonoidBackward dout i
+backward dout (Affine w _ x)        = affineBackward dout w x
+backward _    (SoftmaxWithLoss y t) = softmaxBackward y t
+backward _    None                  = error "Invalid Layer None"
 
 reluBackward :: Dout -> Matrix2DD -> (Dout, Layer Gradient)
 reluBackward ds is = (zipWith f ds is, None)
@@ -91,7 +105,7 @@ affineBackward dout w x = (delay dx, Affine dw db undefined)
         mapSum = reshape (ix2 1 (size.extent $ dout)). foldS (+) 0
         ts = computeS . transpose
 
-softmaxBackward :: Matrix2DD -> Matrix2DD -> Dout
-softmaxBackward x t = dx
-  where batsize = row . extent $ x
-        dx = map (/(fromIntegral batsize)) (x -^ t)
+softmaxBackward :: Matrix2DU -> Matrix2DU -> (Dout, Layer Gradient)
+softmaxBackward y t = (dx, None)
+  where batsize = row . extent $ y
+        dx = map (/(fromIntegral batsize)) (y -^ t)

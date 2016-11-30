@@ -22,9 +22,6 @@ iterNum = 20
 
 main :: IO ()
 main = do
-  let x = delay $ fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
-      y = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
-  p $ crossEntropyError (softmax x) y 2
   d <- dataset
   n <- network [28*28, 20, 10] ((-1.0), 1.0)
   putStrLn . ("Accuracy:"++) . format $ accuracy d batsize n
@@ -38,8 +35,6 @@ main = do
       putStrLn . ("Accuracy:"++) . format $ accuracy d batsize n
       putStrLn . ("Loss    :"++) . (show)  $ loss d batsize n
       return n'
-    g (w, b) = (w, b, sigmonoid)
-    k ls = updateL ls (length ls-1) (\(w, b, _) -> (w, b, softmax))
     f (w, b, _) = (w, b)
     p s = print s >> hFlush stdout
     format = (++"%"). show . floor . (*100)

@@ -13,6 +13,10 @@ import Debug.Trace (trace)
 
 import Mnist (NormalizedDataSet)
 import Util (updateAS, modifyL)
+import Functions ( meanSquaredError
+                 , crossEntropyError
+                 , sigmonoid
+                 , softmax)
 
 import qualified BackProp as BackProp
 
@@ -21,6 +25,8 @@ import qualified BackProp as BackProp
 -- >>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
 -- >>> let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
 -- >>> let x = fromListUnboxed (ix2 2 3) [(1::Double)..6]
+-- >>> n <- network [2, 4, 2] (0, 0.1)
+-- >>> nb = nnb n
 
 type Matrix r = Array r DIM2 Double
 
@@ -44,7 +50,7 @@ weight :: Layer -> Weight
 weight = (^._1)
 
 bias :: Layer -> Bias
-bias = (^._2
+bias = (^._2)
 
 type NN = [Layer]
 
@@ -96,14 +102,18 @@ nnb ((w, b, _):xs) = [ BackProp.Affine w b undefined
 predictB :: Matrix D -> NNB ->
             (Matrix D, [BackProp.Layer BackProp.Backward])
 predictB input n = foldl f (input, []) n
-  where f (i, ls) x = let (i', s) = BackProp.forward i x
-                      in (i', s:ls)
+  where f (i, ls) x = (i', s:ls)
+          where (BackProp.OutputMatrix i', s) = BackProp.forward i x
 
+-- | lossB
+-- >>> fst (lossB (y, t) 2 nb) =~ loss (y, t) 2 n $ 2
+-- True
 lossB :: NormalizedDataSet -> Int -> NNB ->
          (Double, [BackProp.Layer BackProp.Backward])
-lossB (input, label) batsize n = (l, b:bs)
+lossB (input, label) _ n = (l, b:bs)
   where (x, bs) = predictB (delay input) n
-        (l, b) = BackProp.softmaxForward
+        (BackProp.OutputDouble l, b) =
+          BackProp.forward x (BackProp.SoftmaxWithLoss label undefined)
 
 predict :: Matrix U -> NN -> Matrix U
 predict input n = foldl f input n
@@ -189,39 +199,7 @@ gradientDescent learningRate = (mapM f .) . zip
         gw', gb' :: Matrix D
         gw' = map (*learningRate) $ fromListUnboxed shW gw
         gb' = map (*learningRate) $ fromListUnboxed shB gb
----}
-
-meanSquaredError :: LossFunction
-meanSquaredError x y n = (0.5 * (sumAllS $ R.zipWith (\a b -> (a-b)^2) x y))/
-                         fromIntegral n
-
-
-{- | crossEntropyError
->>> crossEntropyError y t 2 =~ 0.857399 $ 3
-True
--}
-crossEntropyError :: LossFunction
-crossEntropyError y t n = ((*(-1)) . sumAllS . (*^t) $
-                           map (log . (+delta)) y) / fromIntegral n
-  where
-    delta = 1e-4
 
 matrix :: DIM2 -> Int -> (Double, Double) -> Int -> Matrix U
 matrix shape len range gen = fromListUnboxed shape $
                              take len . randomRs range $ mkStdGen gen
-
-sigmonoid :: ActivationFunction
-sigmonoid = computeS . map (\x -> 1 / (1 + exp (-x)))
-
-{- | softmax
->>> 2 =~ sumAllS (softmax (delay x)) $ 2
-True
--}
-softmax :: ActivationFunction
-softmax x = computeS $ expY /^  sumExpY
-  where
-    maxX2 = R.traverse x id (f (foldS max 0 x))
-    y = x -^ maxX2 -- For overflow countermeasure
-    expY = map exp y
-    sumExpY = R.traverse expY id (f (foldS (+) 0 expY))
-    f arr _ (Z:.i:._) = index arr (ix1 i)
