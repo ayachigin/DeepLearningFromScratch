@@ -14,6 +14,8 @@ import Debug.Trace (trace)
 import Mnist (NormalizedDataSet)
 import Util (updateAS, modifyL)
 
+import qualified BackProp as BackProp
+
 -- $setup
 -- >>> import Util ((=~))
 -- >>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
@@ -32,6 +34,8 @@ type ActivationFunction = Matrix D -> Matrix U
 
 type Layer = (Weight, Bias, ActivationFunction)
 
+type LayerB = BackProp.Layer
+
 type Gradient = ([Double], [Double])
 
 type Gradients = [Gradient]
@@ -40,9 +44,11 @@ weight :: Layer -> Weight
 weight = (^._1)
 
 bias :: Layer -> Bias
-bias = (^._2)
+bias = (^._2
 
 type NN = [Layer]
+
+type NNB = [BackProp.Layer BackProp.Forward]
 
 type LossFunction = Matrix U -> Matrix U -> Int -> Double
 
@@ -66,6 +72,12 @@ network (x1:x2:xs) range = do
       l <- a
       g (col.extent.weight $ l) b
 
+nnb :: NN -> NNB
+nnb [] = []
+nnb [(w, b, _)] = [BackProp.Affine w b undefined]
+nnb ((w, b, _):xs) = [ BackProp.Affine w b undefined
+                     , BackProp.ReLU undefined] ++ nnb xs
+
 (+^^) :: (Source r1 Double, Source r2 Double) =>
       Array r1 DIM2 Double -> Array r2 DIM2 Double -> Array D DIM2 Double
 (+^^) x b = if r == 1 then
@@ -81,6 +93,17 @@ network (x1:x2:xs) range = do
     g sh = index b (ix2 0 c)
       where c = col sh
 
+predictB :: Matrix D -> NNB ->
+            (Matrix D, [BackProp.Layer BackProp.Backward])
+predictB input n = foldl f (input, []) n
+  where f (i, ls) x = let (i', s) = BackProp.forward i x
+                      in (i', s:ls)
+
+lossB :: NormalizedDataSet -> Int -> NNB ->
+         (Double, [BackProp.Layer BackProp.Backward])
+lossB (input, label) batsize n = (l, b:bs)
+  where (x, bs) = predictB (delay input) n
+        (l, b) = BackProp.softmaxForward
 
 predict :: Matrix U -> NN -> Matrix U
 predict input n = foldl f input n
