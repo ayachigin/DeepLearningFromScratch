@@ -12,7 +12,13 @@ import Control.Lens hiding (index)
 import Debug.Trace (trace)
 
 import Mnist (NormalizedDataSet)
-import Util (updateAS, modifyL, (=~))
+import Util (updateAS, modifyL)
+
+-- $setup
+-- >>> import Util ((=~))
+-- >>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
+-- >>> let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
+-- >>> let x = fromListUnboxed (ix2 2 3) [(1::Double)..6]
 
 type Matrix r = Array r DIM2 Double
 
@@ -168,8 +174,6 @@ meanSquaredError x y n = (0.5 * (sumAllS $ R.zipWith (\a b -> (a-b)^2) x y))/
 
 
 {- | crossEntropyError
->>> let y = fromListUnboxed (ix2 2 2) [0.6, 0.9, 0.2, 0.3]
->>> let t = fromListUnboxed (ix2 2 2) [0, 1, 1, 0]
 >>> crossEntropyError y t 2 =~ 0.857399 $ 3
 True
 -}
@@ -187,7 +191,6 @@ sigmonoid :: ActivationFunction
 sigmonoid = computeS . map (\x -> 1 / (1 + exp (-x)))
 
 {- | softmax
->>> let x = fromListUnboxed (ix2 2 3) [(1::Double)..6]
 >>> 2 =~ sumAllS (softmax (delay x)) $ 2
 True
 -}
