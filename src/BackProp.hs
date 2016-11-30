@@ -1,4 +1,12 @@
-module BackProp where
+module BackProp
+  ( Forward
+  , Backward
+  , Gradient
+  , Layer (..)
+  , forward
+  , backward
+  , softmaxForward
+  , softmaxBackward) where
 
 
 import Prelude hiding (map, zipWith)
@@ -12,6 +20,10 @@ data Backward
 
 data Gradient
 
+type Matrix2DU = Array U DIM2 Double
+
+type Matrix2DD = Array D DIM2 Double
+
 type Input = Matrix2DD
 
 type Output = Matrix2DD
@@ -21,10 +33,6 @@ type Weight = Matrix2DU
 type Bias = Matrix2DU
 
 type Dout = Matrix2DD
-
-type Matrix2DU = Array U DIM2 Double
-
-type Matrix2DD = Array D DIM2 Double
 
 data Layer a = Affine Weight Bias Input
              | Sigmonoid Matrix2DD
