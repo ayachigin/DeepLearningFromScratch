@@ -19,7 +19,7 @@ import Functions ( meanSquaredError
                  , softmax
                  , (+^^))
 
-import qualified BackProp as BackProp
+import qualified BackProp as BP
 
 -- $setup
 -- >>> import Util ((=~))
@@ -41,7 +41,7 @@ type ActivationFunction = Matrix D -> Matrix U
 
 type Layer = (Weight, Bias, ActivationFunction)
 
-type LayerB = BackProp.Layer
+type LayerB = BP.Layer
 
 type Gradient = ([Double], [Double])
 
@@ -55,7 +55,7 @@ bias = (^._2)
 
 type NN = [Layer]
 
-type NNB = [BackProp.Layer BackProp.Forward]
+type NNB = [BP.Layer BP.Forward]
 
 type LossFunction = Matrix U -> Matrix U -> Int -> Double
 
@@ -81,25 +81,30 @@ network (x1:x2:xs) range = do
 
 nnb :: NN -> NNB
 nnb [] = []
-nnb [(w, b, _)] = [BackProp.Affine w b undefined]
-nnb ((w, b, _):xs) = [ BackProp.Affine w b undefined
-                     , BackProp.ReLU undefined] ++ nnb xs
+nnb [(w, b, _)] = [BP.Affine w b undefined]
+nnb ((w, b, _):xs) = [ BP.Affine w b undefined
+                     , BP.ReLU undefined] ++ nnb xs
+
+nbn :: NNB -> NN
+nbn = concat . fmap f
+  where f (BP.Affine w b _) = [(w, b, undefined)]
+        f _              = []
 
 predictB :: Matrix D -> NNB ->
-            (Matrix D, [BackProp.Layer BackProp.Backward])
+            (Matrix D, [BP.Layer BP.Backward])
 predictB input n = foldl f (input, []) n
   where f (i, ls) x = (i', s:ls)
-          where (BackProp.OutputMatrix i', s) = BackProp.forward i x
+          where (BP.OutputMatrix i', s) = BP.forward i x
 
 -- | lossB
 -- >>> fst (lossB (y, t) 2 nb) =~ loss (y, t) 2 n $ 1
 -- True
 lossB :: NormalizedDataSet -> Int -> NNB ->
-         (Double, [BackProp.Layer BackProp.Backward])
+         (Double, [BP.Layer BP.Backward])
 lossB (input, label) _ n = (l, b:bs)
-  where (x, bs) = predictB (delay input) n
-        (BackProp.OutputDouble l, b) =
-          BackProp.forward x (BackProp.SoftmaxWithLoss label undefined)
+  where
+    (x, bs) = predictB (delay input) n
+    (BP.OutputDouble l, b) = BP.forward x (BP.SoftmaxWithLoss label undefined)
 
 -- | accuracyB
 -- >>> accuracyB (y, t) 2 nb == accuracy (y, t) 2 n
@@ -108,6 +113,23 @@ accuracyB :: NormalizedDataSet -> Int -> NNB -> Double
 accuracyB (i, l) bat n = accuracy' l (computeS x) bat
   where
     (x, _) = predictB (delay i) n
+
+-- | gradient
+-- >>> gsb = gradient (y, t) 2 nb
+-- >>> print $ snd head $ gsb
+gradient :: NormalizedDataSet -> Int -> NNB -> Gradients
+gradient dataset bat nb= toGradient . backward $ ls
+  where
+    (_, ls) = lossB dataset bat nb
+    backward :: [BP.Layer BP.Backward] -> [BP.Layer BP.Gradient]
+    backward = snd . foldl f (undefined, [])
+      where f (d, gs) x = (d', g:gs)
+              where (d', g) = BP.backward d x
+    toGradient :: [BP.Layer BP.Gradient] -> Gradients
+    toGradient = concat . fmap f
+      where
+        f (BP.Affine w b _) = [(toList w, toList b)]
+        f _                 = []
 
 
 predict :: Matrix U -> NN -> Matrix U
@@ -186,6 +208,11 @@ numericalGradient input bat net = mapM calcGradient [0..len]
                            newLayer1  = l & _2 .~ newBiases1
                            newLayer2  = l & _2 .~ newBiases2
                        in (newLayer1, newLayer2)
+
+gradientDescentB :: Monad m => Double -> NNB -> Gradients -> m NNB
+gradientDescentB lr nb g = do
+  n <- gradientDescent lr (nbn nb) g
+  return $ nnb n
 
 gradientDescent :: Monad m => Double -> NN -> Gradients -> m NN
 gradientDescent learningRate = (mapM f .) . zip
