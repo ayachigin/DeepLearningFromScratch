@@ -49,6 +49,7 @@ data Layer a = Affine Weight Bias Input
              | ReLU Matrix2DD
              | SoftmaxWithLoss Matrix2DU Matrix2DU
              | None
+             deriving (Eq)
 
 forward :: Input -> Layer Forward -> (LayerOutput, Layer Backward)
 forward i (ReLU _)              = reluForward i
@@ -102,7 +103,9 @@ affineBackward dout w x = (delay dx, Affine dw db undefined)
         dx = mmultS ds (ts w)
         dw = mmultS (ts (computeS x)) ds
         db = computeS $ mapSum dout
-        mapSum = reshape (ix2 1 (size.extent $ dout)). foldS (+) 0
+        mapSum :: Array D DIM2 Double -> Array D DIM2 Double
+        mapSum = reshape (ix2 1 (col.extent $ dout)) .
+                 foldS (+) 0 . transpose
         ts = computeS . transpose
 
 softmaxBackward :: Matrix2DU -> Matrix2DU -> (Dout, Layer Gradient)
