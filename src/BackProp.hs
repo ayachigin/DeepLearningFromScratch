@@ -70,7 +70,7 @@ sigmonoidForward i = (OutputMatrix out, Sigmonoid out)
 
 affineForward :: Input -> Weight -> Bias ->
                  (LayerOutput, Layer Backward)
-affineForward i w b = (OutputMatrix (delay x), Affine w b x)
+affineForward i w b = (OutputMatrix (delay x), Affine w b i)
   where i' = computeS i
         x = (mmultS i' w) +^^ b
 
