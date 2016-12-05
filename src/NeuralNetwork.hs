@@ -18,7 +18,7 @@ import Functions ( meanSquaredError
                  , sigmonoid
                  , softmax
                  , (+^^))
-
+import Types
 import qualified BackProp as BP
 
 -- $setup
@@ -28,36 +28,6 @@ import qualified BackProp as BP
 -- >>> let x = fromListUnboxed (ix2 2 3) [(1::Double)..6]
 -- >>> n <- network [2, 4, 2] (0, 0.1)
 -- >>> nb = nnb n
-
-type Matrix r = Array r DIM2 Double
-
-type Vector = Array U DIM1 Double
-
-type Weight = Matrix U
-
-type Bias = Matrix U
-
-type ActivationFunction = Matrix D -> Matrix U
-
-type Layer = (Weight, Bias, ActivationFunction)
-
-type LayerB = BP.Layer
-
-type Gradient = ([Double], [Double])
-
-type Gradients = [Gradient]
-
-weight :: Layer -> Weight
-weight = (^._1)
-
-bias :: Layer -> Bias
-bias = (^._2)
-
-type NN = [Layer]
-
-type NNB = [BP.Layer BP.Forward]
-
-type LossFunction = Matrix U -> Matrix U -> Int -> Double
 
 network :: [Int] -> (Double, Double) -> IO NN
 network (x1:x2:xs) range = do
@@ -72,7 +42,7 @@ network (x1:x2:xs) range = do
       r1 <- randomIO
       r2 <- randomIO
       return $ ( matrix (ix2 a b) (a*b) range r1
-               , matrix (ix2 1 b) b range r2
+               , matrix (ix2 1 b) b (0, 0.01) r2
                , sigmonoid)
     f :: IO Layer -> Int -> IO Layer
     f a b = do
