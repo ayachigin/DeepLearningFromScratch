@@ -24,6 +24,9 @@ executable NN
                      , vector
                      , random
                      , lens
+                     , wreq
+                     , directory
+                     , zlib
 
 test-suite doctests
   type:            exitcode-stdio-1.0

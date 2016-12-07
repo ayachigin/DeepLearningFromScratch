@@ -9,9 +9,14 @@ module Mnist
 
 import Prelude hiding (map)
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as BL
 import System.Random (randomRIO)
 import Control.Monad (replicateM)
 import Data.Array.Repa hiding ((++))
+import System.Directory
+import Control.Lens
+import Network.Wreq (get, responseBody)
+import Codec.Compression.GZip (decompress)
 
 type Label = Int
 
@@ -59,6 +64,41 @@ choice' (i, l) idxs = (imgs, labels)
 
 readTrainDataSets :: IO (B.ByteString, B.ByteString)
 readTrainDataSets  = do
+  downloadDatasetsIfMissing
   i <- B.readFile "mnist/train-images.idx3-ubyte"
   l <- B.readFile "mnist/train-labels.idx1-ubyte"
   return $ (i, l)
+
+readTestDataSets :: IO (B.ByteString, B.ByteString)
+readTestDataSets  = do
+  downloadDatasetsIfMissing
+  i <- B.readFile "mnist/test-images.idx3-ubyte"
+  l <- B.readFile "mnist/test-labels.idx1-ubyte"
+  return $ (i, l)
+
+-- | downloadDatasetsIfMissing
+--
+-- Download mnist datast if missing
+downloadDatasetsIfMissing :: IO ()
+downloadDatasetsIfMissing = do
+  ti1 <- doesFileExist "mnist/train-images.idx3-ubyte"
+  tl1 <- doesFileExist "mnist/train-labels.idx1-ubyte"
+  ti2 <- doesFileExist "mnist/test-images.idx3-ubyte"
+  tl2 <- doesFileExist "mnist/test-labels.idx1-ubyte"
+  if not ti1 || not tl1 || not ti2 || not tl2 then
+    downloadAll
+  else return ()
+  where
+    downloadAll = mapM_ f urls
+    f (url, path) = do
+      d <- download url
+      BL.writeFile path d
+    download = fmap (decompress. (^. responseBody)) . get
+    urls = [ ( "http://yann.lecun.com/exdb/mnist/train-images-idx3-ubyte.gz"
+             , "mnist/train-images.idx3-ubyte")
+           , ( "http://yann.lecun.com/exdb/mnist/train-labels-idx1-ubyte.gz"
+             , "mnist/train-labels.idx1-ubyte")
+           , ( "http://yann.lecun.com/exdb/mnist/t10k-images-idx3-ubyte.gz"
+             , "mnist/test-images.idx3-ubyte")
+           , ( "http://yann.lecun.com/exdb/mnist/t10k-labels-idx1-ubyte.gz"
+             , "mnist/test-labels.idx1-ubyte")]
