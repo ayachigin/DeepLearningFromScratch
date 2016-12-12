@@ -1,6 +1,7 @@
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators, TypeSynonymInstances, FlexibleInstances #-}
 module CNN where
 
+import Prelude hiding (map, (++), zipWith, traverse)
 import Data.Array.Repa
 
 import Types
@@ -46,3 +47,16 @@ focus :: (Source r e, Shape sh) =>
 focus arr idx = fromFunction sh' f
   where (sh' :. _) = extent arr
         f sh = index arr (sh :. idx)
+
+pad :: (Source r1 e, Num e) =>
+       Int ->
+       Array r1 DIM2 e -> Array D DIM2 e
+pad p arr = fromFunction (ix2 (x+2*p) (y+2*p)) f
+  where (Z:.x:.y) = extent arr
+        f (Z:.x':.y')= if g then 0
+                       else index arr (ix2 (x'-p) (y'-p))
+          where g = x' < p || y' < p || x' >= x + p || y' >= y + p
+
+test :: Array U DIM2 Float
+test = computeS $ pad 2 x
+  where x = fromListUnboxed (ix2 2 3) [(1::Float)..6]
