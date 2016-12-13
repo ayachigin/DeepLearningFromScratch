@@ -57,18 +57,32 @@ pad3d arr p = fromFunction (ix3 ch (x+2*p) (y+2*p)) f
           | otherwise = index arr (ix3 ch' (x'-p) (y'-p))
           where isPad = x' < p || y' < p || x' >= x + p || y' >= y + p
 
-im2col4d :: (Source r1 e, Source r2 e) =>
-          Im2ColOption ->
-          Array r1 DIM4 e ->
-          Array r2 DIM2 e
-im2col4d opts arr = f
-  where
-    newShape = undefined
-    f = undefined
+class Im2Col shape where
+  im2col :: (Source r e, Num e) =>
+            Im2ColOption ->
+            Array r shape e ->
+            Array D DIM2 e
 
-im2col3d :: (Source r1 e, Num e) =>
+instance Im2Col DIM3 where im2col = im2col3d
+
+instance Im2Col DIM4 where im2col = im2col4d
+
+im2col4d :: (Source r e, Num e) =>
+            Im2ColOption ->
+            Array r DIM4 e ->
+            Array D DIM2 e
+im2col4d opts arr = reshape (ix2 colY colX) col
+  where
+    (Z:.colX:.colY) = extent col
+    col = foldl1 (++) newArrs
+    newArrs = [im2col3d opts $ fromFunction (ix3 x y z) (g w')
+              | w' <- [0..w-1]]
+      where g w' (Z:.x':.y':.z') = index arr (ix4 w' x' y' z')
+    (Z:.w:.x:.y:.z) = extent arr
+
+im2col3d :: (Source r e, Num e) =>
           Im2ColOption ->
-          Array r1 DIM3 e ->
+          Array r DIM3 e ->
           Array D DIM2 e
 im2col3d (Im2ColOption fw fh st p) arr = fromFunction newShape f
   where
@@ -102,14 +116,6 @@ focus arr idx = fromFunction sh' f
   where (sh' :. _) = extent arr
         f sh = index arr (sh :. idx)
 
-pad :: (Source r1 e, Num e) =>
-       Int ->
-       Array r1 DIM2 e -> Array D DIM2 e
-pad p arr = fromFunction (ix2 (x+2*p) (y+2*p)) f
-  where (Z:.x:.y) = extent arr
-        f (Z:.x':.y')= if g then 0
-                       else index arr (ix2 (x'-p) (y'-p))
-          where g = x' < p || y' < p || x' >= x + p || y' >= y + p
 
 test :: Array U DIM2 Float
 test = computeS $ pad 2 x
